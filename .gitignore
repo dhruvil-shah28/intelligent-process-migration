@@ -24,3 +24,80 @@ migration/checkpoints/*
 .idea/
 
 .DS_Store
+
+# ============================================================
+# Intelligent Process Migration - Git Ignore
+# ============================================================
+
+# ------------------------------------------------------------
+# CRIU / runc generated runtime state
+# ------------------------------------------------------------
+migration/checkpoint/
+migration/checkpoint-work/
+migration/runc-checkpoint/
+migration/runc-checkpoint-work/
+migration/runc-restore-work/
+migration/restore-work/
+migration/runc-root/
+
+# ------------------------------------------------------------
+# Generated container root filesystems
+# ------------------------------------------------------------
+migration/destination-rootfs/
+migration/runc-source-rootfs/
+migration/runc-destination-bundle/rootfs/
+migration/runc-source-bundle/rootfs/
+
+# ------------------------------------------------------------
+# Generated runtime bundles / restore artifacts
+# ------------------------------------------------------------
+migration/restore-bundle/
+migration/runc-destination-bundle/*
+!migration/runc-destination-bundle/config.json
+
+migration/runc-source-bundle/*
+!migration/runc-source-bundle/config.json
+
+# ------------------------------------------------------------
+# Runtime logs
+# ------------------------------------------------------------
+*.log
+*.out
+
+# ------------------------------------------------------------
+# Python cache
+# ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+
+# ------------------------------------------------------------
+# OS / editor files
+# ------------------------------------------------------------
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ------------------------------------------------------------
+# Temporary files
+# ------------------------------------------------------------
+*.tmp
+*.temp
+
+# ------------------------------------------------------------
+# Project-generated runtime snapshot
+# ------------------------------------------------------------
+project-status.txt
+
+
+# ------------------------------------------------------------
+# Generated checkpoint/runtime artifacts inside evidence
+# ------------------------------------------------------------
+evidence/**/runc-checkpoint/
+evidence/**/runc-checkpoint-work/
+evidence/**/checkpoint/
+evidence/**/checkpoint-work/
+evidence/**/rootfs/
+evidence/**/restore-work/
+evidence/**/runc-restore-work/
