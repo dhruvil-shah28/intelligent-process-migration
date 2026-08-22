@@ -101,3 +101,12 @@ evidence/**/checkpoint-work/
 evidence/**/rootfs/
 evidence/**/restore-work/
 evidence/**/runc-restore-work/
+
+
+# Runtime migration state
+migration/nodes/
+migration/runc-network-destination-bundle/
+
+# Python cache
+__pycache__/
+*.pyc
