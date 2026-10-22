@@ -1,0 +1,101 @@
+**1. Working**
+
+1. Source Workload Execution:
+   - A long-running counter script (`workloads/workload.py`) runs inside an isolated OCI container named `migration-source` (`migration/runc-source-bundle`) managed by `runc`.
+   - The workload maintains dynamic execution state (an incrementing counter, CPU registers, and standard output streams).
+
+2. Container-Level Resource Monitoring:
+   - The monitoring script (`monitor/cgroup-monitor.sh`) continuously tracks resource consumption at intervals defined by `CHECK_INTERVAL` in `monitor/config.conf`.
+   - It reads kernel accounting files directly from the cgroup v2 filesystem (`/sys/fs/cgroup/.../migration-source/`):
+     - `cpu.stat`: Samples cumulative CPU usage time (`usage_usec`) to compute active CPU percentage across time deltas.
+     - `memory.current`: Measures current working memory footprint in bytes.
+
+3. Threshold-Based Decision:
+   - `monitor/cgroup-monitor.sh` evaluates computed resource metrics against preconfigured limits (`CPU_THRESHOLD=50`, `MEMORY_THRESHOLD=70` in `monitor/config.conf`).
+   - If usage exceeds threshold limits, the engine flags `migration-source` as a `MIGRATION CANDIDATE`.
+
+4. Migration Trigger:
+   - When flagged and `AUTO_MIGRATE=true`, `monitor/cgroup-monitor.sh` triggers the migration controller script (`controller/migrate.sh`) and terminates the monitoring loop.
+
+5. Source Checkpoint (State Preservation):
+   - `controller/migrate.sh` validates that `migration-source` is healthy and active.
+   - Cleans and prepares checkpoint directories (`migration/checkpoint` and `migration/checkpoint-work`).
+   - Invokes `runc checkpoint`, triggering CRIU (Checkpoint/Restore In Userspace). CRIU freezes the container processes, dumps memory pages, register states, process hierarchy, and file descriptors to disk image files, and stops `migration-source`.
+
+6. Destination Restore (State Reconstruction):
+   - `controller/migrate.sh` executes `runc restore` targeting the destination bundle (`migration/runc-destination-bundle`) and the saved CRIU image directory.
+   - Launches `migration-restored` as an active background container process.
+   - Confirms recovery by polling container runtime state (`runc state migration-restored`).
+
+7. Output Mapping and Verification:
+   - Verification tooling (`demo/run-demo.sh`) inspects `/proc/1/fd/1` and container status.
+   - Confirms the source container is stopped, the destination container is running, and the workload counter resumes incrementing from its exact checkpointed value without data loss or reset.
+
+
+**2. Concepts of OS utilized**
+
+- Process - An active instance of a computer program executing in memory with its own dedicated context.
+- Process ID (PID) - A unique numerical identifier assigned by the operating system kernel to track and manage a running process.
+- Execution Context & Registers - The volatile internal state of a process, including CPU register contents, instruction pointer, and stack pointer.
+- Virtual Memory - An OS abstraction providing an isolated, contiguous address space for each process while transparently mapping it to physical RAM.
+- File Descriptors (FD) - Kernel-managed integer references allowing processes to perform input/output operations on files, sockets, pipes, and standard streams.
+- procfs & sysfs - Virtual in-memory filesystems (`/proc` and `/sys`) exposing kernel data structures, process metrics, and device statistics to user space.
+- Linux Namespaces - A kernel isolation feature providing discrete views of system resources (PID, Mount, Network, IPC, UTS) to contain processes.
+- cgroups v2 (Control Groups) - A unified kernel mechanism that meters, restricts, and accounts for hardware resource utilization (CPU, memory, I/O) across process hierarchies.
+- Open Container Initiative (OCI) Bundle - A standardized filesystem layout containing a root filesystem (`rootfs`) and a declarative configuration file (`config.json`) defining container behavior.
+- runc - A standardized, low-level CLI tool that configures Linux namespaces and cgroups to spawn and run OCI-compliant containers.
+- CRIU (Checkpoint/Restore In Userspace) - A system utility that freezes running Linux processes, serializes their state (memory, registers, descriptors) into binary images, and restores them later.
+- Process Migration - The technique of transferring a running process from one execution environment to another while preserving complete operational state.
+
+
+**3. System arch of the project**
+
++-------------------------------------------------------------------------+
+|                           SOURCE WORKLOAD                               |
+|  Container: migration-source (runc)                                     |
+|  Script   : workloads/workload.py                                       |
+|  State    : Memory Pages | CPU Registers | Open FDs (/proc/1/fd/1)      |
++------------------------------------+------------------------------------+
+                                     |
+                                     | Resource Metrics (cpu.stat, memory.current)
+                                     v
++-------------------------------------------------------------------------+
+|                      RESOURCE MONITOR (cgroup v2)                       |
+|  Script   : monitor/cgroup-monitor.sh                                   |
+|  Path     : /sys/fs/cgroup/.../migration-source/                        |
+|  Function : Samples CPU usage delta & memory consumption               |
++------------------------------------+------------------------------------+
+                                     |
+                                     | Periodic Metrics
+                                     v
++-------------------------------------------------------------------------+
+|                            DECISION ENGINE                              |
+|  Config   : monitor/config.conf (CPU_THRESHOLD=50, MEMORY_THRESHOLD=70) |
+|  Condition: Metric >= Threshold -> Flag as MIGRATION CANDIDATE          |
++------------------------------------+------------------------------------+
+                                     |
+                                     | Trigger (AUTO_MIGRATE=true)
+                                     v
++-------------------------------------------------------------------------+
+|                         MIGRATION CONTROLLER                            |
+|  Script   : controller/migrate.sh                                       |
++------------------+-----------------------------------+------------------+
+                   |                                   |
+       [Step 1]    | Freeze & Dump                     | [Step 2] Restore
+                   v                                   v
++--------------------------------------+   +------------------------------+
+|            CRIU CHECKPOINT           |   |         runc RESTORE         |
+| Command: runc checkpoint             |   | Command: runc restore        |
+| Target : migration-source            |   | Bundle : runc-destination-   |
+| Dumps  : migration/checkpoint/       |-->|          bundle              |
+| Status : Source Stopped              |   | Images : migration/checkpoint|
++--------------------------------------+   +--------------+---------------+
+                                                          |
+                                                          | Spawns
+                                                          v
++-------------------------------------------------------------------------+
+|                        DESTINATION WORKLOAD                             |
+|  Container: migration-restored (runc)                                   |
+|  State    : Resumes exact counter state and I/O streams                 |
+|  Verified : demo/run-demo.sh                                            |
++-------------------------------------------------------------------------+
