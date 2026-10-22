@@ -46,6 +46,18 @@
 - runc - A standardized, low-level CLI tool that configures Linux namespaces and cgroups to spawn and run OCI-compliant containers.
 - CRIU (Checkpoint/Restore In Userspace) - A system utility that freezes running Linux processes, serializes their state (memory, registers, descriptors) into binary images, and restores them later.
 - Process Migration - The technique of transferring a running process from one execution environment to another while preserving complete operational state.
+- System calls - Direct programmatic requests to the OS kernel (like clone, fork, and ptrace) used by runtimes and CRIU to inspect, freeze, and reconstruct processes.
+- Operations on processes - Kernel actions to spawn, monitor, suspend (freeze), and terminate processes across container lifecycle and migration stages.
+- Inter-process communication - OS mechanisms including pipes, signals, and stream redirection allowing separate processes to exchange data and logs.
+- Multithreading models - Concurrently executing multiple threads within a shared process address space, utilized by the node agent server to handle incoming connections.
+- Docker / Containerization - OS-level virtualization packaging applications and root filesystems into isolated execution environments running on a shared kernel.
+- Paging - Memory management dividing memory into fixed-size pages, dumped to image files during checkpointing and mapped back into RAM on restore.
+- File system interface & Directory structure - OS abstractions organizing files and directories into hierarchies for OCI bundles, checkpoint images, and archives.
+- File system mounting - Attaching isolated directory trees (rootfs, procfs, cgroups) into container mount points.
+- `top`, `htop`, `vmstat` monitoring - Real-time gathering of CPU and memory metrics via kernel virtual filesystems and psutil, reflecting OS monitoring tools.
+- Distributed system definition and goals - Coordinating multiple autonomous nodes over a network to achieve workload mobility, load balancing, and fault tolerance.
+- Communication in distributed systems - Exchanging structured JSON protocol messages and binary checkpoint archives across nodes using TCP network sockets.
+- Distributed coordination - Cluster management tracking node health via heartbeats (PING/PONG) and selecting target nodes for process migration.
 
 
 **3. System arch of the project**
