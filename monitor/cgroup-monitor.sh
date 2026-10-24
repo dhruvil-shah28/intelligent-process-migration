@@ -1,8 +1,9 @@
 #!/bin/bash
 
 SOURCE="migration-source"
+PROJECT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-CGROUP_BASE="/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.konsole-33815.scope"
+CGROUP_BASE="${IPM_CGROUP_BASE:-/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.konsole-33815.scope}"
 
 CGROUP="$CGROUP_BASE/$SOURCE"
 
@@ -10,6 +11,8 @@ CONFIG="$(dirname "$0")/config.conf"
 source "$CONFIG"
 
 INTERVAL="$CHECK_INTERVAL"
+
+trap 'echo "[INFO] Stop requested; exiting monitor."; exit 0' TERM INT
 
 echo "=========================================="
 echo " Container Resource Monitor (cgroup v2)"
@@ -25,14 +28,14 @@ if [ ! -f "$CGROUP/memory.current" ]; then
     exit 1
 fi
 
-PREV_CPU=$(sudo awk '/usage_usec/ {print $2}' "$CGROUP/cpu.stat")
+PREV_CPU=$(awk '/usage_usec/ {print $2}' "$CGROUP/cpu.stat")
 PREV_TIME=$(date +%s%N)
 
 while true; do
 
     sleep "$INTERVAL"
 
-    CURRENT_CPU=$(sudo awk '/usage_usec/ {print $2}' "$CGROUP/cpu.stat")
+    CURRENT_CPU=$(awk '/usage_usec/ {print $2}' "$CGROUP/cpu.stat")
     CURRENT_TIME=$(date +%s%N)
 
     CPU_DELTA=$((CURRENT_CPU - PREV_CPU))
@@ -48,7 +51,7 @@ while true; do
                 printf "0.00";
         }')
 
-    MEMORY_BYTES=$(sudo cat "$CGROUP/memory.current")
+    MEMORY_BYTES=$(cat "$CGROUP/memory.current")
 
     MEMORY_MB=$(awk \
         -v bytes="$MEMORY_BYTES" \
@@ -66,9 +69,17 @@ if awk -v cpu="$CPU_PERCENT" -v threshold="$CPU_THRESHOLD" 'BEGIN {exit !(cpu >=
         echo "[ACTION] Automatic migration enabled."
         echo "[ACTION] Starting migration controller..."
 
-        sudo "/home/dhruvil/intelligent-process-migration/controller/migrate.sh"
-
-        echo "[ACTION] Migration controller completed."
+        if [ "$(id -u)" -eq 0 ]; then
+            "$PROJECT/controller/migrate.sh"
+        else
+            sudo -n "$PROJECT/controller/migrate.sh"
+        fi
+        RESULT=$?
+        if [ "$RESULT" -eq 0 ]; then
+            echo "[ACTION] Migration controller completed."
+        else
+            echo "[ERROR] Migration controller failed with exit code $RESULT."
+        fi
         break
     else
         echo "[ACTION] AUTO_MIGRATE=false → dry-run only."
