@@ -8,12 +8,7 @@ The system monitors a running containerized workload and automatically migrates 
 
 The migration pipeline is:
 
-Source Workload
-→ cgroup v2 Monitoring
-→ Decision Engine
-→ CRIU Checkpoint
-→ runc Restore
-→ Destination Workload
+Source Workload → cgroup v2 Monitoring → Decision Engine → CRIU Checkpoint → runc Restore → Destination Workload
 
 ## Core Components
 
@@ -58,6 +53,10 @@ Performs:
 5. Destination validation
 6. Migration completion reporting
 
+### 5. Live Frontend (procflow)
+
+A Vite + React web interface (`procflow/`) backed by a Python host bridge (`procflow/api/server.py`). It lets you start the source workload, run the monitor, trigger a CPU burst, and watch each migration stage and the backend output live in the browser.
+
 ## Automatic Migration
 
 When CPU usage exceeds the configured threshold:
@@ -93,6 +92,64 @@ During the final demonstration, the system detected approximately 100% CPU utili
 - CRIU
 - cgroup v2
 - OCI container specification
+- React, Vite, TypeScript (frontend)
+
+## Running the Frontend Demo
+
+The live demo has two parts: a Vite frontend and a Python host bridge (API) that runs the migration scripts. Run both from the `procflow` folder, each in its own terminal tab.
+
+### Requirements
+
+- Linux with cgroup v2, `runc`, and `criu` installed
+- Node.js 20.19+ and pnpm 11
+- Python 3
+- `sudo` access (runc and CRIU need root)
+
+### One-time setup
+
+```bash
+cd procflow
+pnpm install
+```
+
+### Tab 1: Frontend
+
+```bash
+cd procflow
+pnpm dev
+```
+
+Open http://localhost:3000/
+
+### Tab 2: Host bridge (API)
+
+```bash
+cd procflow
+export IPM_CGROUP_BASE=/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.konsole-<ID>.scope
+sudo -E python3 api/server.py
+```
+
+The API listens on `127.0.0.1:4174`.
+
+`IPM_CGROUP_BASE` must be the cgroup of the terminal window that runs the API. The Konsole scope number (`<ID>`) changes whenever a new Konsole window is opened. Find yours with:
+
+```bash
+cat /proc/self/cgroup
+```
+
+Use the path from that output without the trailing `/tab(...).scope` part, prefixed with `/sys/fs/cgroup`.
+
+### Using the demo
+
+In the browser, open **Live Workspace**, then:
+
+1. Click **Start source workload**
+2. Start the monitor
+3. Click **Apply 12-second CPU burst**
+
+The monitor detects the CPU spike, CRIU checkpoints the source, runc restores it as `migration-restored`, and the counter continues from its checkpointed value.
+
+Use **Reset demo** to start over.
 
 ## Project Structure
 
@@ -111,8 +168,14 @@ intelligent-process-migration/
 │   ├── runc-source-bundle/
 │   ├── runc-destination-bundle/
 │   └── workloads/
+├── procflow/
+│   ├── api/
+│   │   └── server.py
+│   ├── src/
+│   └── package.json
 ├── evidence/
 │   ├── final-controller.sh
 │   ├── final-cgroup-monitor.sh
 │   └── final-config.conf
 └── README.md
+```
